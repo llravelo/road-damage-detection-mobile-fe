@@ -16,9 +16,9 @@ struct ImageMetadata: Encodable, Sendable {
 }
 
 enum IngestService {
-    private static let endpoint: URL = {
-        let raw = Bundle.main.object(forInfoDictionaryKey: "SERVER_ENDPOINT") as? String
-            ?? "http://192.168.0.21:3000/api/v1/images/batch"
+    private static let baseURL: URL = {
+        let raw = Bundle.main.object(forInfoDictionaryKey: "SERVER_BASE_URL") as? String
+            ?? "http://192.168.0.21:8000"
         return URL(string: raw)!
     }()
 
@@ -28,8 +28,38 @@ enum IngestService {
         return URLSession(configuration: config)
     }()
 
-    static func send(batch: [FrameBuffer.Frame]) {
+    // Hardcoded test credentials — seeded in backend on startup
+    private static let testEmail = "test@example.com"
+    private static let testPassword = "testpassword123"
+
+    private static var accessToken: String?
+
+    private static func ensureToken() async throws {
+        guard accessToken == nil else { return }
+        let url = baseURL.appendingPathComponent("api/v1/auth/login")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        let body = "username=\(testEmail)&password=\(testPassword)"
+        request.httpBody = body.data(using: .utf8)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            print("[Ingest] Login failed: HTTP \(code)")
+            throw URLError(.badServerResponse)
+        }
+        struct TokenResponse: Decodable { let access_token: String }
+        let decoded = try JSONDecoder().decode(TokenResponse.self, from: data)
+        accessToken = decoded.access_token
+    }
+
+    static func send(batch: [FrameBuffer.Frame]) async {
         guard !batch.isEmpty else { return }
+        do { try await ensureToken() } catch {
+            print("[Ingest] Auth failed: \(error.localizedDescription)")
+            return
+        }
 
         let boundary = "PGBoundary-\(UUID().uuidString)"
         var body = Data()
@@ -51,19 +81,35 @@ enum IngestService {
 
         body.appendString("--\(boundary)--\r\n")
 
-        var request = URLRequest(url: endpoint)
+        let url = baseURL.appendingPathComponent("api/v1/images/batch")
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = body
 
-        session.dataTask(with: request) { _, response, error in
-            if let error {
-                print("[Ingest] \(error.localizedDescription)")
-            } else if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-                print("[Ingest] HTTP \(http.statusCode)")
+        do {
+            let (_, response) = try await session.data(for: request)
+            if let http = response as? HTTPURLResponse {
+                if http.statusCode == 401 { accessToken = nil }  // expired — reset so next call re-auths
+                else if http.statusCode != 201 { print("[Ingest] HTTP \(http.statusCode)"); return }
             }
-        }.resume()
+        } catch {
+            print("[Ingest] \(error.localizedDescription)")
+            return
+        }
+
+        // TODO: remove once the server handles analysis on a periodic schedule (e.g. Celery Beat)
+        var triggerRequest = URLRequest(url: baseURL.appendingPathComponent("api/v1/analysis/trigger"))
+        triggerRequest.httpMethod = "POST"
+        if let token = accessToken {
+            triggerRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        _ = try? await session.data(for: triggerRequest)
     }
+
 }
 
 private extension Data {

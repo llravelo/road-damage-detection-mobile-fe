@@ -27,8 +27,10 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>SERVER_BASE_URL</key>
+	<string>http://172.20.10.4:8000</string>
 	<key>SERVER_ENDPOINT</key>
-	<string>http://172.20.10.4:3000/api/v1/images/batch</string>
+	<string>http://172.20.10.4:8000/api/v1/images/batch</string>
 	<key>BATCH_SIZE</key>
 	<integer>10</integer>
 	<key>UIApplicationSceneManifest</key>

@@ -31,7 +31,7 @@ final class FrameBuffer {
         let batch = buffer
         buffer.removeAll()
         Task.detached(priority: .utility) {
-            IngestService.send(batch: batch)
+            await IngestService.send(batch: batch)
         }
     }
 
