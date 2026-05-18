@@ -34,4 +34,8 @@ final class FrameBuffer {
             IngestService.send(batch: batch)
         }
     }
+
+    func clear() {
+        buffer.removeAll()
+    }
 }

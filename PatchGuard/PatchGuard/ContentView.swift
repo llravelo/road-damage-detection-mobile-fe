@@ -11,6 +11,8 @@ struct ContentView: View {
     @StateObject private var gps = LocationManager()
     @State private var buffer = FrameBuffer()
 
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var fps = 1
     @State private var frameCount = 0
 
@@ -40,6 +42,10 @@ struct ContentView: View {
             }
         }
         .onAppear(perform: setup)
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .background, camera.isRunning else { return }
+            handleBackgroundTransition()
+        }
     }
 
     private var statusBar: some View {
@@ -102,6 +108,13 @@ struct ContentView: View {
             gps.start()
             camera.start()
         }
+    }
+
+    private func handleBackgroundTransition() {
+        camera.onFrame = nil
+        camera.stop()
+        gps.stop()
+        buffer.clear()
     }
 
     private func handleFrame(_ image: UIImage) {
