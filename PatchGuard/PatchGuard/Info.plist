@@ -32,7 +32,7 @@
 	<key>BATCH_SIZE</key>
 	<integer>10</integer>
 	<key>TEST_MODE</key>
-	<true/>
+	<false/>
 	<key>MOCK_SERVER_BASE_URL</key>
 	<string>http://192.168.0.21:3000</string>
 	<key>UIApplicationSceneManifest</key>
