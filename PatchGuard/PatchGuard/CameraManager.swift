@@ -11,23 +11,20 @@ import UIKit
 private let logger = Logger(subsystem: "com.patchguard", category: "CameraManager")
 
 final class CameraManager: NSObject, ObservableObject {
-    @Published var isRunning = false
-    @Published var isCalibrated = false
+    @Published private(set) var isCalibrated = false
 
     nonisolated(unsafe) let session = AVCaptureSession()
+    var onFrame: ((UIImage) -> Void)?
+
     nonisolated(unsafe) private let ciContext = CIContext()
     nonisolated(unsafe) private var samplingInterval: TimeInterval = 1.0
     nonisolated(unsafe) private var lastFrameTime: TimeInterval = 0
     nonisolated(unsafe) private var captureDevice: AVCaptureDevice?
-
-    // Tracks device orientation and physically rotates the pixel buffer via the connection
     nonisolated(unsafe) private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
     nonisolated(unsafe) private var rotationObservation: NSKeyValueObservation?
 
-    var onFrame: ((UIImage) -> Void)?
-
     private let sessionQueue = DispatchQueue(label: "pg.camera.session", qos: .userInitiated)
-    private let frameQueue = DispatchQueue(label: "pg.camera.frames", qos: .userInitiated)
+    private let frameQueue   = DispatchQueue(label: "pg.camera.frames",  qos: .userInitiated)
 
     func configure() {
         sessionQueue.async { [weak self] in
@@ -35,6 +32,10 @@ final class CameraManager: NSObject, ObservableObject {
             self.captureDevice = self.setupSession()
             self.session.startRunning()
         }
+    }
+
+    func setSamplingRate(_ fps: Int) {
+        samplingInterval = 1.0 / Double(max(1, fps))
     }
 
     func calibrate() {
@@ -58,14 +59,23 @@ final class CameraManager: NSObject, ObservableObject {
         }
     }
 
-    @discardableResult
+    func resetCalibration() {
+        sessionQueue.async { [weak self] in
+            guard let device = self?.captureDevice else { return }
+            try? device.lockForConfiguration()
+            device.exposureMode = .continuousAutoExposure
+            device.unlockForConfiguration()
+            Task { @MainActor [weak self] in self?.isCalibrated = false }
+        }
+    }
+
     nonisolated private func setupSession() -> AVCaptureDevice? {
         session.beginConfiguration()
         session.sessionPreset = .hd1920x1080
 
         guard
             let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-            let input = try? AVCaptureDeviceInput(device: device)
+            let input  = try? AVCaptureDeviceInput(device: device)
         else {
             session.commitConfiguration()
             return nil
@@ -101,28 +111,6 @@ final class CameraManager: NSObject, ObservableObject {
 
         return device
     }
-
-    func setSamplingRate(_ fps: Int) {
-        samplingInterval = 1.0 / Double(max(1, fps))
-    }
-
-    func start() {
-        Task { @MainActor in isRunning = true }
-    }
-
-    func stop() {
-        Task { @MainActor in isRunning = false }
-    }
-
-    func resetCalibration() {
-        sessionQueue.async { [weak self] in
-            guard let device = self?.captureDevice else { return }
-            try? device.lockForConfiguration()
-            device.exposureMode = .continuousAutoExposure
-            device.unlockForConfiguration()
-            Task { @MainActor [weak self] in self?.isCalibrated = false }
-        }
-    }
 }
 
 extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -137,12 +125,10 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-        // Pixel buffer is already upright — videoRotationAngle on the connection handles it.
         // Center-crop to 1080x1080; only the crop region is rendered by CIContext.
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let e = ciImage.extent
-        let side = min(e.width, e.height)
-        let cropRect = CGRect(x: e.midX - side / 2, y: e.midY - side / 2, width: side, height: side)
+        let ciImage  = CIImage(cvPixelBuffer: pixelBuffer)
+        let e        = ciImage.extent
+        let cropRect = CGRect(x: e.midX - 512, y: e.midY - 512, width: 1024, height: 1024)
         guard let cgImage = ciContext.createCGImage(ciImage, from: cropRect) else { return }
 
         Task { @MainActor [weak self] in self?.onFrame?(UIImage(cgImage: cgImage)) }

@@ -29,14 +29,12 @@
 	</dict>
 	<key>SERVER_BASE_URL</key>
 	<string>http://192.168.0.28:8000</string>
-	<key>SERVER_ENDPOINT</key>
-	<string>http://192.168.0.28:8000/api/v1/images/batch</string>
 	<key>BATCH_SIZE</key>
 	<integer>10</integer>
 	<key>TEST_MODE</key>
-	<false/>
+	<true/>
 	<key>MOCK_SERVER_BASE_URL</key>
-	<string>http://localhost:3000</string>
+	<string>http://192.168.0.21:3000</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationIsServiceApplication</key>

@@ -5,16 +5,6 @@
 
 import Foundation
 
-struct ImageMetadata: Encodable, Sendable {
-    let filename: String
-    let latitude: Double
-    let longitude: Double
-    let captured_at: String
-    let heading: Double?
-    let altitude: Double?
-    let gps_accuracy: Double?
-}
-
 enum IngestService {
     static let isTestMode: Bool =
         Bundle.main.object(forInfoDictionaryKey: "TEST_MODE") as? Bool ?? false
