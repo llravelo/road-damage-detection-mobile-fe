@@ -5,7 +5,10 @@
 
 import AVFoundation
 import Combine
+import OSLog
 import UIKit
+
+private let logger = Logger(subsystem: "com.patchguard", category: "CameraManager")
 
 final class CameraManager: NSObject, ObservableObject {
     @Published var isRunning = false
@@ -26,12 +29,24 @@ final class CameraManager: NSObject, ObservableObject {
 
     func configure() {
         sessionQueue.async { [weak self] in
-            self?.setupSession()
-            self?.session.startRunning()
+            guard let self else { return }
+            guard let device = self.setupSession() else { return }
+            self.session.startRunning()
+            try? device.lockForConfiguration()
+            device.setExposureModeCustom(
+                duration: CMTime(value: 1, timescale: 500),
+                iso: AVCaptureDevice.currentISO
+            ) { _ in
+                let d = device.exposureDuration
+                let shutter = d.value > 0 ? Int(Double(d.timescale) / Double(d.value)) : 0
+                logger.info("Shutter locked — 1/\(shutter)s, ISO \(device.iso, format: .fixed(precision: 0))")
+            }
+            device.unlockForConfiguration()
         }
     }
 
-    nonisolated private func setupSession() {
+    @discardableResult
+    nonisolated private func setupSession() -> AVCaptureDevice? {
         session.beginConfiguration()
         session.sessionPreset = .hd1280x720
 
@@ -40,7 +55,7 @@ final class CameraManager: NSObject, ObservableObject {
             let input = try? AVCaptureDeviceInput(device: device)
         else {
             session.commitConfiguration()
-            return
+            return nil
         }
 
         if session.canAddInput(input) { session.addInput(input) }
@@ -70,6 +85,8 @@ final class CameraManager: NSObject, ObservableObject {
                 }
             }
         }
+
+        return device
     }
 
     func setSamplingRate(_ fps: Int) {
