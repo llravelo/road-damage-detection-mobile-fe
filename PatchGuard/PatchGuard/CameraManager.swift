@@ -44,6 +44,8 @@ final class CameraManager: NSObject, ObservableObject {
             do {
                 try device.lockForConfiguration()
                 device.setExposureModeCustom(
+                    // Attempt to fix exposure rate to 1/500
+                    // This reduces motion blur effect and keep road crack features sharp
                     duration: CMTime(value: 1, timescale: 500),
                     iso: AVCaptureDevice.currentISO
                 ) { _ in
@@ -125,7 +127,7 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-        // Center-crop to 1080x1080; only the crop region is rendered by CIContext.
+        // Center-crop to 1024x1024; only the crop region is rendered by CIContext.
         let ciImage  = CIImage(cvPixelBuffer: pixelBuffer)
         let e        = ciImage.extent
         let cropRect = CGRect(x: e.midX - 512, y: e.midY - 512, width: 1024, height: 1024)
