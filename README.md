@@ -1,6 +1,12 @@
 # PatchGuard
 
-Road-surface capture system. The iOS app samples camera frames at a configurable rate, tags each frame with GPS metadata, and batch-uploads JPEGs to an ingest server.
+## Introduction
+
+PatchGuard is a road damage survey and assessment system. It helps field teams and road authorities locate, document, and evaluate damage such as potholes, cracks, and surface deterioration by combining mobile image capture with server-side analysis.
+
+This repository contains the **mobile survey app** — the data-collection front end of that system. The app lets users survey roads by capturing camera frames as they travel, automatically tagging each frame with GPS location, heading, and altitude. Captured frames are batched and forwarded to the inference server, where they are analyzed to detect and assess road damage.
+
+The iOS app samples camera frames at a configurable rate, tags each frame with GPS metadata, and batch-uploads JPEGs to an ingest server.
 
 ## Components
 
